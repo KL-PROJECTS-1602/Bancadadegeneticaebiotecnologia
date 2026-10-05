@@ -116,6 +116,9 @@ ol,ul{margin:8px 0;padding-left:22px} li{margin:4px 0}
 .rodape{margin-top:34px;padding-top:14px;border-top:1px solid var(--linha);
   font-size:12px;color:var(--fraco)}
 .res{font-family:var(--serif);font-size:19px;font-weight:700;color:var(--acento)}
+
+.rodadas{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.rodadas .acao{flex:1 1 calc(50% - 8px);min-width:120px;text-align:center}
 </style>
 <div class="env">
 <header class="topo">
@@ -325,13 +328,22 @@ function vLicao(){
       l.prereq.map(function(p){ var o=D.licoes.filter(function(x){return x.id===p})[0];
         return o? '<button class="acao sec" data-ir="licao" data-id="'+o.id+'" style="margin:3px 4px 0 0;font-size:13px;padding:6px 11px">'+esc(o.titulo)+'</button>':'' }).join("")+'</p></div>';
   }
-  h+='<button class="acao" data-ir="questoes" data-licao="'+l.id+'" style="margin-top:14px">'+
-     'Praticar esta lição ('+a.total+' questões) →</button>';
+  var feitasL=a.feitas, faltam=a.total-a.feitas;
+  h+='<div class="cartao" style="margin-top:14px"><div class="rot a">Praticar esta lição</div>'+
+     '<p>Escolha quantas questões quer fazer agora. A rodada começa pelas que você ainda não respondeu'+
+     (faltam>0? ' — faltam '+faltam+' de '+a.total+'.' : '. Você já respondeu todas as '+a.total+'.')+'</p>'+
+     '<div class="rodadas">'+
+     [5,10,15,20].map(function(n){
+       var disp = Math.min(n, a.total);
+       return '<button class="acao'+(n===10?'':' sec')+'" data-ir="questoes" data-licao="'+l.id+
+              '" data-qtd="'+n+'"'+(a.total<n?' disabled':'')+'>'+disp+' questões</button>' }).join('')+
+     '<button class="acao sec" data-ir="questoes" data-licao="'+l.id+'" data-qtd="0">todas ('+a.total+')</button>'+
+     '</div></div>';
   return h;
 }
 
 /* ---------- questões ---------- */
-var filtro={licao:"",dif:"",deck:"",so:""}, fila=[], pos=0;
+var filtro={licao:"",dif:"",deck:"",so:"",qtd:""}, fila=[], pos=0;
 function montarFila(){
   fila=D.questoes.filter(function(q){
     if(filtro.licao && q.licao!==filtro.licao) return false;
@@ -341,10 +353,16 @@ function montarFila(){
     if(filtro.so==="novas" && E.resp[q.id]!=null) return false;
     return true;
   });
+  var n=parseInt(filtro.qtd,10);
+  if(n>0 && fila.length>n){
+    var novas=[], feitas=[];
+    fila.forEach(function(q){ (E.resp[q.id]==null? novas : feitas).push(q) });
+    fila = novas.concat(feitas).slice(0,n);
+  }
   if(pos>=fila.length) pos=0;
 }
 function vQuestoes(){
-  if(ctx.licao){ filtro.licao=ctx.licao; filtro.so=""; pos=0; ctx.licao=null }
+  if(ctx.licao){ filtro.licao=ctx.licao; filtro.so=""; filtro.qtd=(ctx.qtd||""); pos=0; ctx.licao=null; ctx.qtd=null }
   montarFila();
   var h='<div class="kicker">Banco de questões</div><h2 class="tit" style="font-size:22px;margin:5px 0 10px">'+
    'As '+D.questoes.length+' questões</h2><div class="filtros">'+
@@ -353,7 +371,8 @@ function vQuestoes(){
    sel("dif","Dificuldade",[["","todas"],["basica","básica"],["intermediaria","intermediária"],["avancada","avançada"]])+
    sel("deck","Aula",[["","todas"],["21/09","21/09 — Mendelismo"],["28/09","28/09 — Extensões"],["05/10","05/10 — Sexo e heredogramas"]])+
    sel("so","Mostrar",[["","todas"],["novas","ainda não respondidas"],["erradas","que eu errei"]])+
-   '</div><p class="fonte" style="margin-top:8px">'+fila.length+' questão(ões) neste filtro.</p><div id="caixa"></div>';
+   sel("qtd","Quantas agora",[["","todas do filtro"],["5","5 questões"],["10","10 questões"],["15","15 questões"],["20","20 questões"]])+
+   '</div><p class="fonte" style="margin-top:8px">'+fila.length+' questão(ões) nesta rodada'+(filtro.qtd? ', começando pelas que você ainda não respondeu':'')+'.</p><div id="caixa"></div>';
   return h;
 }
 function sel(k,rot,ops){
@@ -488,11 +507,17 @@ function vComprovante(){
        (E.enviado===cod? 'Você já enviou exatamente estes dados. Responda mais questões antes de enviar de novo.' : '')+
        '</p></div>'
      : '')+
-    '<div class="cartao"><div class="rot">Se o envio falhar — copiar o código</div>'+
+    (location.protocol==='file:'
+     ? '<div class="cartao alerta"><div class="rot o">Atenção — este arquivo foi aberto do seu aparelho</div>'+
+       '<p>Quando a Bancada é aberta direto do arquivo baixado, o botão de envio não funciona: o navegador bloqueia. '+
+       'Use o <b>código do comprovante</b> abaixo — ele vale igual. Copie, baixe ou mande por e-mail.</p></div>'
+     : '')+
+    '<div class="cartao"><div class="rot">O código do comprovante — sempre funciona</div>'+
       '<label for="cod">Código do comprovante</label>'+
       '<input id="cod" type="text" readonly value="'+esc(cod)+'" style="font-family:ui-monospace,Menlo,monospace;font-size:12px">'+
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="acao" data-copiar="1">copiar código</button>'+
+      '<button class="acao sec" data-baixar="1">baixar comprovante</button>'+
       '<a class="acao sec" style="text-decoration:none;display:inline-block" '+
         'href="mailto:'+esc(D.contato)+'?subject='+assunto+'&body='+corpoMail+'">enviar por e-mail</a>'+
       '</div><p class="fonte" style="margin-top:8px" id="cop"></p></div>';
@@ -788,7 +813,7 @@ function calcHW(){
 function ligar(raiz){
   raiz=raiz||document;
   [].forEach.call(raiz.querySelectorAll("[data-ir]"),function(b){ b.onclick=function(){
-    ir(b.dataset.ir, {id:b.dataset.id, licao:b.dataset.licao}) } });
+    ir(b.dataset.ir, {id:b.dataset.id, licao:b.dataset.licao, qtd:b.dataset.qtd}) } });
   [].forEach.call(raiz.querySelectorAll("[data-opc]"),function(b){ b.onclick=function(){
     var q=fila[pos]; if(E.resp[q.id]!=null) return;
     E.resp[q.id]=parseInt(b.dataset.opc,10); salvar(); pintarQuestao() } });
@@ -797,7 +822,25 @@ function ligar(raiz){
   [].forEach.call(raiz.querySelectorAll("[data-filtro]"),function(s){ s.onchange=function(){
     filtro[s.dataset.filtro]=s.value; pos=0; ir("questoes") } });
   [].forEach.call(raiz.querySelectorAll("[data-so]"),function(b){ b.onclick=function(){
-    filtro={licao:"",dif:"",deck:"",so:b.dataset.so}; pos=0; ir("questoes") } });
+    filtro={licao:"",dif:"",deck:"",so:b.dataset.so,qtd:""}; pos=0; ir("questoes") } });
+  [].forEach.call(raiz.querySelectorAll("[data-baixar]"),function(b){ b.onclick=function(){
+    var tot=D.questoes.length, feitas=0, certas=0;
+    D.questoes.forEach(function(q){ var r=E.resp[q.id]; if(r!=null){feitas++; if(r===q.gabarito)certas++} });
+    var txt="COMPROVANTE — BANCADA DE GENÉTICA\n"+D.componente+
+      "\n\nNome: "+ALUNO.nome+"\nMatrícula: "+ALUNO.matricula+
+      "\nEntradas: "+((E.entradas||[]).length)+
+      "\nQuestões respondidas: "+feitas+" de "+tot+
+      "\nAcertos: "+certas+(feitas? " ("+Math.round(certas/feitas*100)+"%)":"")+
+      "\nGerado em: "+(function(){var d=new Date();
+        return ("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2)+"/"+d.getFullYear()})()+
+      "\n\nCÓDIGO (não altere esta linha):\n"+comprovante()+"\n";
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([txt],{type:"text/plain;charset=utf-8"}));
+    a.download="comprovante_"+String(ALUNO.matricula||"aluno").replace(/[^0-9A-Za-z]/g,"")+".txt";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove() },1500);
+    var c=$("#cop"); if(c) c.textContent="Arquivo baixado. Envie-o à professora pelo SIGAA ou por e-mail.";
+  } });
   [].forEach.call(raiz.querySelectorAll("[data-zerar]"),function(b){ b.onclick=zerar });
   [].forEach.call(raiz.querySelectorAll("[data-sair]"),function(b){ b.onclick=function(){ entrou=false; ir("entrada") } });
   [].forEach.call(raiz.querySelectorAll("[data-copiar]"),function(b){ b.onclick=function(){
